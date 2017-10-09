@@ -1,0 +1,116 @@
+<div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="col-sm-12">
+                <h5>{{record.title}}</h5>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="row" id="record-information">
+                <div class="info"><b>Title:</b> {{record.title}}</div>
+                <div class="info"><b>Subject:</b> {{record.subject}}</div>
+                <div class="info"><b>Creator:</b> {{record.creator}}</div>
+                <div class="info"><b>Publisher:</b> {{record.publisher}}</div>
+                <div class="info"><b>Language:</b> {{record.language}}</div>
+                <div class="info"><b>Date:</b> {{record.date}}</div>
+                <div class="info"><b>Description:</b> {{record.description}}</div>
+                <div class="info"><b>Datestamp:</b> {{datestamp()}}</div>
+            </div>
+            <div class="row" id="first-rang-recommendations" *ngIf="recommendations != null && recommendations.length > 0">
+                <hr>
+                <div class="row">
+                    <h5>This could also interest you!</h5>
+                </div>
+                <div class="row recommendations">
+                    <div class="col-xs-2 col-sm-2 col-md-2 col-lg-2 recommendation" *ngFor="let r of recommendations">
+                        <div class="bookCover">
+                            <i class="fa fa-book fa-2x" aria-hidden="true"></i>
+                        </div> <br/>
+                        <div class="bookDetails">
+                            <span *ngIf="r.title.length != 0" class="recommendationTitle">{{r.title}}</span>
+                        </div>
+                        <div class="show-when-hover">{{r.title}}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="second-rang-recommendations" *ngIf="secondRangRecommendations != null && secondRangRecommendations.length > 0">
+                <hr>
+                <div class="row">
+                    <h5>More stuff only for you!</h5>
+                </div>
+                <div class="row recommendations">
+                    <div class="col-xs-2 col-sm-2 col-md-2 col-lg-2 recommendation" *ngFor="let r of secondRangRecommendations">
+                        <div class="bookCover">
+                            <i class="fa fa-book fa-2x" aria-hidden="true"></i>
+                        </div> <br/>
+                        <div class="bookDetails">
+                            <span *ngIf="r.title.length != 0" class="recommendationTitle">{{r.title}}</span>
+                        </div>
+                        <div class="show-when-hover">{{r.title}}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="reviews" *ngIf="record.reviews != null && record.reviews.length > 0">
+                <hr>
+                <div class="row">
+                    <h5>Reviews</h5>
+                </div>
+                <div class="row reviews">
+                    <div class="row review" *ngFor="let r of record.reviews">
+                        <label>{{r.rating}}/5</label> <label><b style="color: #C49F66">{{r.title}}</b></label> <br/>
+                        <label>by {{r.user}} on {{r.datestamp.toString()}}</label>
+                        <div id="reviewBody">{{r.body}}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" *ngIf="!formActive && !reviewSent">
+                <hr>
+                <div class="col-xs-3 col-sm-3 col-md-3 col-lg-3 pull-left">
+                    <button class="btn btn-info" id="addButton" (click)="enableForm()">Write a Review</button>
+                </div>
+            </div>
+            <div *ngIf="formActive && !reviewSent">
+                <div class="row">
+                    <hr>
+                    <div class="row review-creator">
+                        <label for="rating">Rating:</label> <br/>
+                        <select id="rating" [(ngModel)]="ratingValue" #rating="ngModel" rating=0 style="width: 200px">
+                            <option disabled selected value>select a score</option>
+                            <option [value]="1">1</option>
+                            <option [value]="2">2</option>
+                            <option [value]="3">3</option>
+                            <option [value]="4">4</option>
+                            <option [value]="5">5</option>
+                        </select>
+                    </div>
+                    <div class="row review-creator">
+                        <label for="title">Title:</label> <br/>
+                        <input placeholder="Title" type="text" required minlength="5" maxlength="25" id="title" [(ngModel)]="titleValue" #title="ngModel" title="title" style="width: 200px">
+                    </div>
+                    <div class="row review-creator">
+                        <label for="body">Review:</label> <br/>
+                        <textarea placeholder="Review" required rows="7" cols="81" minlength="20" id="body" [(ngModel)]="bodyValue" #body="ngModel" body="body"></textarea>
+                    </div>
+                    <div class="row review-creator">
+                        <label for="name">Name:</label> <br/>
+                        <input placeholder="Name" type="text" required minlength="5" maxlength="25" id="name" [(ngModel)]="nameValue" #name="ngModel" name="name" style="width: 200px">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-3 col-sm-3 col-md-3 col-lg-3 pull-right">
+                        <button class="btn btn-info" id="submitButton" (click)="submit()">Submit Review</button>
+                    </div>
+                </div>
+            </div>
+            <div *ngIf="!formActive && reviewSent">
+                <hr>
+                <div style="text-align: center; color: #C49F66">
+                    Thank you for submitting your review!
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-default" (click)="close()">Close</button>
+        </div>
+    </div>
+</div>
