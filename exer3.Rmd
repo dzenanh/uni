@@ -1,0 +1,249 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 3 Experiment - Dzenan Hamzic, TU Wien"
+output: html_notebook
+---
+
+### Libraries
+```{r}
+library(MASS)
+#install.packages("glmnet", dependencies=TRUE)
+library(glmnet)
+set.seed(123)
+```
+
+
+### Load Data
+```{r}
+# load data
+data(Hitters, package = "ISLR")
+ # count rows
+nrow(Hitters)
+```
+
+
+### Clean empty rows and show number of raws again
+```{r}
+# clean empty rows
+Hitters = na.omit(Hitters)
+nrow(Hitters)
+``` 
+
+### Split data randomly on 50% splits (train and test)
+```{r}
+set.seed(0607)
+ind <- sample(c(TRUE, FALSE), nrow(Hitters), replace=TRUE, prob=c(0.5, 0.5))
+train_data <- Hitters[ind, ]
+test_data <- Hitters[!ind, ]
+train_data
+test_data
+```
+#### X data
+```{r}
+names(train_data[,-19])
+```
+
+#### scale all but Salary
+```{r}
+X_train <- data.frame(scale(data.matrix((train_data[, -19] ))))
+X_test <- data.frame(scale(data.matrix(test_data[, -19])))
+# here I choose not to scale y because model showed no performance gain on scaled y
+# moreover, I wanted to be able to compare MSE with previous exercises
+y_test <- test_data$Salary
+head(X_train)
+#y <- as.matrix(train_data[,c("Salary")])
+```
+
+
+```{r}
+X_train["Salary"] <- train_data$Salary
+head(X_train)
+```
+
+
+
+```{r}
+model.ridge.basic <- lm.ridge(Salary ~ ., data = X_train, lambda = 1)
+model.ridge.basic
+plot(model.ridge.basic)
+```
+# 1. Ridge Regression:
+
+## 1.a
+```{r}
+lm_seq = seq(0,10,0.001)
+head(lm_seq)
+```
+
+
+```{r}
+model.ridge <- lm.ridge(Salary ~ ., data = X_train, lambda = lm_seq)
+#head(model.ridge)
+plot(model.ridge, main="Schrinkaga of Ridge Regression")
+```
+
+```{r}
+select(model.ridge)
+```
+
+
+```{r}
+plot(model.ridge$lambda, model.ridge$GCV, type = "l", main="GCV of Ridge Regression")
+```
+#### Optimal lambda & minimal GCV
+```{r}
+#head(model.ridge$GCV[,2])
+#plot(model.ridge$GCV)
+min_gcv <- min(model.ridge$GCV)
+# find index of smallest GCV
+min_gcv_index <- match(min_gcv, model.ridge$GCV)
+model.ridge$GCV[323]
+```
+
+
+
+
+#### INTEPRETATION
+Generalized cross validation GCV is a good approximation of the Leave one out CV by linear fits with quadratic errors. In this case, the optimal lambda seems to be 0.322  (see both plots above) with GCV of 959.7083.
+
+
+## 1.b
+```{r}
+model.ridge.optimal <- lm.ridge(Salary ~ ., data = X_train, lambda = 0.322)
+```
+
+#### Regression coefficients
+```{r}
+model.ridge.optimal$coef
+```
+
+
+## 1.c
+```{r}
+# predict with optimal ridge parameters
+prediction <- as.matrix(cbind(const=1,X_test)) %*% coef(model.ridge.optimal)
+head(prediction)
+```
+
+
+### MSE
+```{r}
+#model.ridge.optimal.predict <- predict(model.ridge.optimal , newdata = X_test)
+#head(model.ridge.optimal.predict)
+
+mean((y_test - prediction[,1]) ^ 2)
+```
+### MSE with using modified HKB estimator is 0.7463882 as lambda
+```{r}
+model.ridge.optimal2 <- lm.ridge(Salary ~ ., data = X_train, lambda = 0.7463882)
+# predict with optimal ridge parameters
+prediction2 <- as.matrix(cbind(const=1,X_test)) %*% coef(model.ridge.optimal2)
+mean((y_test - prediction2[,1]) ^ 2)
+```
+ 
+
+
+
+### Graphically
+```{r}
+plot(prediction[,1], y_test, title("Predicted vs Measured - No log no scale"))
+abline(c(0,1))
+plot(log(prediction[,1]), log(y_test), title("Predicted vs Measured - log scale"))
+abline(c(0,1))
+
+#require(gridExtra)
+#plot1 <- plot(prediction[,1], y_test)
+#plot2 <- plot(log(prediction[,1]), log(y_test))
+#grid.arrange(plot1, plot2, ncol=2)
+```
+
+
+#### INTEPRETATION 
+Ridge regression beats standard PCR on MSE. However, best subset PCR regression still performs significantly better. Graphically, ridge shows decent fit but still with quite high predictive deviation.
+
+
+
+# 2. Lasso Regression:
+## 2.a 
+
+```{r}
+X_train <- (scale(data.matrix((train_data[, -19] ))))
+y_train <- train_data$Salary
+
+lasso.model <- glmnet(X_train, y_train)
+```
+
+```{r}
+plot(lasso.model, label = TRUE)
+```
+#### INTEPRETATION
+Each curve on the plot corresponds to a variable. Top numbers(top axis) indicate the number of nonzero coefficients. Penalizaton gets stronger going from left(0 penalization) to right (max penalization). Less important variable parameters of are reduced to 0 (from left to right), thus removed alltogether, based on absolute value of magnitude. The default value of alpha is in lasso regression is 1. When alpha is 0 , Lasso regression produces the same coefficients as a linear regression. When alpha is very very large, all coefficients are zero.
+
+
+```{r}
+print(lasso.model)
+```
+
+## 2.b
+```{r}
+cv_fit = cv.glmnet(X_train, y_train, nfolds = 10)
+plot(cv_fit)
+```
+#### Optimal tuning parameters and coefficients
+```{r}
+cv_fit$lambda.min
+log(cv_fit$lambda.min)
+log(cv_fit$lambda.1se)
+coef(cv_fit, s = "lambda.min")
+```
+### Minimal model (lambda.1se)
+```{r}
+coef(cv_fit, s = "lambda.1se")
+```
+
+
+#### INTEPRETATION
+Minimal model has least parameters and is in ragne of +/- 1 Standard error of the minimal one(lambda.min parameter). On the plot above, that would be the right vertical line(lambda.1se parameter).
+
+
+## 2.c
+```{r}
+# measure with few other lambdas - (could and should be done with range in order to find
+# best predictive model based on MSE)
+lambdas <- c(2.91,log(cv_fit$lambda.min),4.00,log(cv_fit$lambda.1se))
+lasso_prediction <- predict(cv_fit, newx = as.matrix(X_test), s=lambdas)
+head(lasso_prediction)
+```
+
+#### MSE
+```{r}
+mean((y_test - lasso_prediction[,2]) ^ 2)
+```
+
+#### MSE for all lambdas
+```{r}
+for (model in colnames(lasso_prediction)){
+  print(model) 
+  print(mean((y_test - lasso_prediction[,model]) ^ 2))
+}
+```
+
+
+#### PLOT
+```{r}
+plot(lasso_prediction[,1], y_test)
+abline(c(0,1))
+plot(lasso_prediction[,2], y_test)
+abline(c(0,1))
+
+plot(lasso_prediction[,3], y_test)
+abline(c(0,1))
+plot(lasso_prediction[,4], y_test)
+abline(c(0,1))
+#plot(log(prediction[,1]), log(y_test))
+#abline(c(0,1))
+```
+
+#### INTEPRETATION
+Here I have measured MSE on range of lambdas including lambda.min and lambda.1se.
+The best predictive performance shows model with lambda.min which has 7 variables.
+Amazingly, not that far away is the model with lambda.1se which, with only 1 variable, delivers pretty good(low) MSE of 110305. Lasso regression, with setting variable coeficients to zero has the better predictive performance based on MSE then Ridge regression (112372, ~110000). Furthermore, it is more suitable for the model reduction.

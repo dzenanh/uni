@@ -1,0 +1,339 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 2 Experiment - Dzenan Hamzic, TU Wien"
+output: html_notebook
+---
+
+
+```{r}
+library(pls)
+library(leaps)
+library(devtools)
+library(ggbiplot)
+```
+
+
+### Load Data
+```{r}
+# load data
+data(Hitters, package = "ISLR")
+ # count rows
+nrow(Hitters)
+```
+
+
+### Clean empty rows and show number of raws again
+```{r}
+# clean empty rows
+Hitters = na.omit(Hitters)
+nrow(Hitters)
+``` 
+
+### Split data randomly on 50% splits (train and test)
+```{r}
+set.seed(0607)
+ind <- sample(c(TRUE, FALSE), nrow(Hitters), replace=TRUE, prob=c(0.5, 0.5))
+train_data <- Hitters[ind, ]
+test_data <- Hitters[!ind, ]
+train_data
+test_data
+```
+
+
+Split to X and y
+```{r}
+#str(Hitters)
+#X <- Hitters[,!names(Hitters) %in% c("Salary")]
+#y <- Hitters$Salary
+```
+
+
+```{r}
+#lm.model <- lm(scale(Hitters$Salary) ~. , data = scale(Hitters))
+#summary(lm.model)
+```
+
+
+# 1. Principal component regression (PCR)
+### (1.a)
+```{r}
+
+model.pcr<-pcr(Salary~., ncomp=19, validation="CV", segments=10, scale=TRUE, data=train_data)
+summ.model <- summary(model.pcr)
+str(summ.model)
+```
+### INTEPRETATION ###
+Two main results are printed, the cross validation error and the cumulative percentage of variance explained using n components.
+
+Cross-validation:
+Root mean squared error on prediction is measured with n components and CV.
+The optimal model has the lowest adjCV, which in this case, seems to be model with 18 principal components with lowest adjCV of 364.1 Interestingly, the model with only 1 component shows suprisingly high predictive performance. One component predictor deliveres CV RMSEP of 365.4(which is even lower then with 18 components) and adjCV of 364.9 which is slightly higher then with 18 components.
+
+I shall compare MSE of both models (with 1 and with 18 components) below.
+
+TRAINING: % variance explained:
+This parameter show how much of the original dataset variance is described with each additional component.
+The 'optimal' model with 18 components describes 99.99% of datasets variance. 
+
+### (1.b) Obtained CV prediction error Plot
+```{r}
+plot(model.pcr, plottype = "validation", val.type = "RMSEP", legend = "topright")
+# or alternatively
+# validationplot(model.pcr, val.type="MSEP")
+```
+### INTEPRETATION ###
+The optimal model seems to have 18 principal component with MSE of 117249.4 (see below). In comparison to MSE (116160.1 with 5 components) from last exercise, the MSE is slightly higher.Comparatively, the optimal model in exercase 1 (at least in my case) hat 5 predictor variables what demonstrates predictive power of PCR with small number of principal components.
+
+
+```{r}
+validationplot(model.pcr, val.type="MSEP")
+```
+
+
+
+## MSE valuation considering the PCR optimal model (18 components)
+```{r}
+optimal.pcr.model <- pcr(Salary~., ncomp=19, segments=10, validation="CV", scale=TRUE, data=train_data)
+pred_test_pcr <- predict(optimal.pcr.model, test_data, ncomp = 18)
+mean((test_data$Salary - pred_test_pcr) ^ 2)
+```
+## MSE valuation considering the PCR optimal model (1 component)
+```{r}
+optimal.pcr.model2 <- pcr(Salary~., ncomp=19, validation="CV", segments=10, scale=TRUE, data=train_data)
+
+pred_test_pcr2 <- predict(optimal.pcr.model2, test_data, ncomp= 5)
+mean((test_data$Salary - pred_test_pcr2) ^ 2)
+```
+
+
+
+### (1.c)
+```{r}
+attr(formula(model.pcr),"variables")
+```
+
+### 1.c optimal model with 18 predictors (based on train data)
+```{r}
+# optimal model with 18 predictors
+predplot(optimal.pcr.model)
+```
+### 1.c optimal model with 1 predictors (based on train data)
+```{r}
+predplot(optimal.pcr.model2)
+```
+
+
+
+# 2. Partial least squares regression (PLS):
+### (2.a)
+```{r}
+model.plsr<-plsr(Salary~. , validation="CV", segments=10 ,scale=TRUE, data=train_data)
+summary(model.plsr)
+```
+
+
+### (2.b)
+```{r}
+plot(RMSEP(model.plsr), legendpos = "topright")
+```
+
+```{r}
+plot(model.plsr, plottype = "validation", val.type = "MSEP", legend = "topright")
+```
+### (2.b) MSE valuation considering the optimal PLS model (1 component)
+```{r}
+# optimal model
+optimal.model.plsr <- plsr(Salary ~ ., validation="CV", segments=10 , scale=TRUE, data=train_data, ncomp=1)
+
+pred.optimal.model.plsr <- predict(optimal.model.plsr, test_data)
+mean((test_data$Salary - pred.optimal.model.plsr) ^ 2)
+```
+
+### (2.b) MSE valuation considering the optimal PLS model (16 component)
+```{r}
+# optimal model
+optimal.model.plsr <- plsr(Salary ~ ., validation="CV", segments=10 , scale=TRUE, data=train_data, ncomp=16)
+
+pred.optimal.model.plsr <- predict(optimal.model.plsr, test_data)
+mean((test_data$Salary - pred.optimal.model.plsr) ^ 2)
+```
+
+
+
+### (2.c) - measured y vs predicted y plot
+```{r}
+predplot(optimal.model.plsr)
+```
+
+
+
+
+# 3. PCR with variable selection:
+
+### (3.1)
+```{r}
+# X (18 predictors)
+# all columns except "Salary""
+# train
+X <- scale(data.matrix((train_data[, !names(train_data) %in% c("Salary")] )))
+y <- as.matrix(train_data[,c("Salary")])
+# test
+X_test <- scale(data.matrix((test_data[, !names(train_data) %in% c("Salary")] )))
+y_test <- as.matrix(test_data[,c("Salary")])
+
+head(y)
+```
+```{r}
+column_names <- names(train_data[, !names(train_data) %in% c("Salary")] )
+column_names
+```
+
+
+
+Column lenght must be same
+```{r}
+ncol(X_test)
+ncol(X)
+```
+
+```{r}
+head(X)
+#test_data_new
+```
+
+Perform PCA
+```{r}
+pca_object = princomp(X, center=TRUE)
+pca_object
+```
+```{r}
+head(pca_object$scores)
+```
+
+
+
+```{r}
+summary(pca_object)
+```
+
+
+```{r}
+plot(pca_object, type = "l")
+```
+
+### (3.2) Biplot
+```{r}
+biplot(pca_object)
+```
+
+```{r}
+#install_github("vqv/ggbiplot")
+```
+
+### (3.2) Biplot
+```{r}
+
+ggbiplot(pca_object)
+```
+### INTEPRETATION ###
+The axes of the biplot show 2 principal components (PC1&PC2) and % of explained variance in the dataset. 
+This plot shows individuals, the first two PC scores and the loading verctors in a singple biplot display.
+
+
+
+
+
+```{r}
+summary(pca_object)
+```
+
+#### Principal Component Scores as new X train
+```{r}
+new_X <- pca_object$scores
+head(new_X)
+#ncol(new_X)
+```
+
+
+#### Create new data frame
+```{r}
+#data.frame(new_X)
+#new_X["Salary"] <- y
+#new_X
+new_df <- data.frame(new_X)
+new_df_test <- data.frame(X_test)
+#colnames(new_df) = column_names
+# train
+new_df["Salary"] <- y
+# test
+# TODO add me later
+#new_df_test["Salary"] <- y_test
+
+head(new_df)
+head(new_df_test)
+```
+
+
+
+
+
+
+
+
+
+
+
+list(Hitters$Salary, AtBat, Hits, HmRun, Runs, RBI, Walks, Years, 
+    CAtBat, CHits, CHmRun, CRuns, CRBI, CWalks, League, Division, 
+    PutOuts, Assists, Errors, NewLeague)
+
+
+
+#### Project test data on principal components
+```{r}
+test.data <- predict(pca_object, newdata = new_df_test)
+test.data <- as.data.frame(test.data)
+test.data["Salary"] <- y_test
+```
+
+```{r}
+head(test.data)
+```
+
+```{r}
+head(new_df)
+```
+
+## Best Subset Regression on Principal Component Scores
+```{r}
+lm.regsubset<-regsubsets(Salary ~ ., data=new_df, nbest = 3, nvmax = 10)
+summary(lm.regsubset)
+```
+
+#### Find the best subset regression based on principal component scores
+```{r}
+plot(lm.regsubset)
+```
+
+# (3.) PCR with variable selection:
+### (3.) Can you beat the results from standard PCR? -> YES 
+
+```{r}
+model.pcr.subset <- pcr(Salary ~ Comp.1 + Comp.14  + Comp.17 + Comp.18, data = new_df, validation="CV", segments=10)
+summary(model.pcr.subset)
+```
+
+### 3.3 Predict with best subset and calculate MSE
+```{r}
+pred.optimal.model.plsr <- predict(model.pcr.subset , newdata = test.data)
+#head(pred.optimal.model.plsr)
+
+mean((test.data$Salary - pred.optimal.model.plsr[,,3]) ^ 2)
+```
+#This result beats standard PCR with no "best" variable selection. Standard PCR MSE: 115183.1
+
+
+
+
+
+
+

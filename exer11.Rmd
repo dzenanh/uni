@@ -1,0 +1,110 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 11 Experiment - Dzenan Hamzic, TU Wien"
+output: html_notebook
+---
+
+## Data:  Bank Marketing Data Set 
+### Algorithm :  Support Vector Machines
+
+#### Description: The data is related with direct marketing campaigns of a Portuguese banking institution. The marketing campaigns were based on phone calls. Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed. 
+
+
+```{r}
+#install.packages("e1071", dependencies = TRUE)
+library(e1071)
+```
+
+#### Helper Functions
+```{r}
+MissCRate = function(tab){
+  1-sum(diag(tab))/sum(tab)
+}
+```
+
+```{r}
+bankdata <- read.csv2("bank.csv")
+head(bankdata)
+```
+
+```{r}
+table(bankdata$y)
+```
+
+```{r}
+set.seed(123)
+n <- nrow(bankdata)
+train <- sample(1:n,round(0.8*n))
+test <- c(1:n)[-train]
+
+train_df <- bankdata[train,]
+test_df <- bankdata[test,]
+table(train_df$y)
+```
+
+## 1.a
+```{r}
+svm.model <- svm(y ~ ., data=train_df)
+svm.pred <- predict(svm.model, test_df)
+tab <- table(test_df$y, svm.pred)
+print(tab)
+MissCRate(tab)
+#bank.rf <- randomForest(y ~ ., data=bankdata, subset = train, importance=TRUE)
+#plot(bank.rf)
+#varImpPlot(bank.rf)
+```
+
+## 2.b
+```{r}
+tuned_parameters <- tune.svm(y ~ ., data=train_df, gamma = 10^(-5:-1), cost = 10^(-5:1))
+summary(tuned_parameters )
+```
+Optimal parameters are: gamma=0.100, cost=1e+00 with error of 0.09813823
+
+
+```{r}
+plot(tuned_parameters)
+```
+Darker area implicate better parameters.
+
+## 2.c
+```{r}
+svm.model2 <- svm(y ~ ., data=train_df, gamma=0.100, cost=1e+00)
+svm.pred2 <- predict(svm.model2, test_df)
+tab2 <- table(test_df$y, svm.pred2)
+print(tab2)
+MissCRate(tab2)
+```
+With "best" parameters, the error has improved. "yes" client correct classification has doubled. 
+
+
+## 2.d - tuning "class.weights" parameter
+```{r}
+costs <- table(bankdata$y)  # the weight vector must be named with the classes names
+costs[1] <- 1e1 # a class -1 mismatch has a terrible cost
+costs[2] <- 1e20    # a class +1 mismatch not so much...
+costs
+```
+### tune with new weights
+```{r}
+tuned_parameters2 <- tune.svm(y ~ ., data=train_df, class.weights=costs, gamma = 10^(-5:2), cost = 10^(-5:2))
+summary(tuned_parameters2)
+```
+
+
+```{r}
+svm.model <- svm(y ~ ., data=train_df, class.weights=costs, gamma=1e-01, cost=1e+01)
+svm.pred <- predict(svm.model, test_df)
+tab <- table(test_df$y, svm.pred)
+print(tab)
+MissCRate(tab)
+```
+
+## Apply the strategy also on the whole data set bank-full.csv.
+```{r}
+svm.model.full <- svm(y ~ ., data=bankdata, class.weights=costs, gamma=1e-01, cost=1e+01)
+svm.pred.full <- predict(svm.model.full, test_df)
+tab.full <- table(test_df$y, svm.pred.full)
+print(tab.full)
+MissCRate(tab.full)
+```
+

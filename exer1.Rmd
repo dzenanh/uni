@@ -1,0 +1,327 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 1 Experiment"
+output: html_notebook
+fig_width: 10
+fig_height: 20 
+---
+```{r}
+install.packages("ISLR")
+```
+
+```{r}
+install.packages("caret")
+install.packages("ggplot2")
+```
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+### Load Data
+```{r}
+# load data
+data(Hitters, package = "ISLR")
+ # count rows
+nrow(Hitters)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+```{r}
+summary(Hitters)
+```
+
+
+### Check dataframe details
+```{r}
+str(Hitters)
+```
+
+
+### How many empty rows?
+```{r}
+# how many empty rows
+nrow(Hitters) - NROW(na.omit(Hitters))
+```
+
+
+### Clean empty rows and show number of raws again
+```{r}
+# clean empty rows
+Hitters = na.omit(Hitters)
+nrow(Hitters)
+``` 
+
+
+Check out Salary distribution
+
+### Salary distribution
+```{r}
+hist(Hitters$Salary)
+```
+
+
+### Split data to train and test datasets
+```{r}
+require(caTools)
+set.seed(101) 
+sample = sample.split(Hitters$AtBat, SplitRatio = .50)
+train = subset(Hitters, sample == TRUE)
+test  = subset(Hitters, sample == FALSE)
+
+train
+test
+```
+
+### Split data randomly on 50% splits (train and test)
+```{r}
+ind <- sample(c(TRUE, FALSE), nrow(Hitters), replace=TRUE, prob=c(0.5, 0.5))
+train_data <- Hitters[ind, ]
+test_data <- Hitters[!ind, ]
+train_data
+test_data
+```
+
+### Convert categorical to numerical (Division, NewLeague)
+
+```{r}
+# convert categorical variables to numerical
+train_data_mat <- data.matrix(train_data)
+test_data_mat <- data.matrix(test_data)
+
+# convert to data frame
+train_data_processed <- as.data.frame(train_data_mat)
+test_data_processed <- as.data.frame(test_data_mat)
+
+# check them out
+train_data_processed
+test_data_processed
+```
+
+
+### Test out the simple full model on Prediction performance
+```{r}
+lmFull<- lm(Salary ~ ., data = train_data_processed)
+summary(lmFull)
+plot(lmFull)
+```
+
+
+### Test prediction power of the full model
+```{r}
+pred_full <- predict.lm(lmFull, test_data_processed)
+summary(pred_full)
+plot(pred_full)
+```
+
+
+### Evaluate the full model visually
+
+```{r}
+#plot(pred_full,test_data$Salary)
+plot(pred_full,type="p",col="red")
+points(test_data_processed$Salary,col="green")
+```
+
+
+### Train FULL model on training data
+```{r}
+
+lmTrain<- lm(Salary ~ ., data = train_data_processed)
+summary(lmTrain)
+#plot(lmTrain)
+```
+
+The coefficients Assists, PutOuts, Walks, Hits, AtBat have very large t-values and very small p-values.
+Therefore, the null hypothesis beta-i=0 should be rejected.
+
+p-value of the F-statistic is also small (2.003*10^-14) and the null hypothesis beta-i=0 for all i (i=1,...,p) should be rejected as well.
+
+R-squared is 0.5936 is a reasonable to good fit. The regression line describes data reasonably.
+
+
+## Calculate the F-statistics
+```{r}
+qf(0.95, 19, 112)
+```
+
+The value of F-statistic of 8.611 is larger than the F quantile F 19,112,0.95. Therefore the null hypothesis beta-i, (for all i (i=1,...,p)) can be rejected. 
+
+
+
+## Calculate the MSE of the full model
+```{r}
+
+mean((test_data_processed$Salary - pred_full) ^ 2)
+```
+
+### Make predictions on test data
+```{r}
+
+pred_test_full <- predict.lm(lmTrain, test_data_processed)
+summary(pred_test_full)
+plot(pred_test_full)
+```
+
+
+
+### Evaluate the test model visually
+
+```{r}
+#plot(pred_full,test_data$Salary)
+plot(pred_test_full,type="p",col="red")
+points(test_data_processed$Salary,col="green")
+```
+
+
+## Calculate the MSE of the model based on train data and tested on test_data
+
+```{r}
+#nrow()
+#nrow(pred_full)
+
+mean((test_data$Salary - pred_test_full) ^ 2)
+```
+
+## Preprocessing
+
+
+
+
+
+## Build new full model with preprocessed data
+
+```{r}
+lmFull2 <- lm(Salary ~ ., data = train_data_processed)
+summary(lmFull2)
+plot(lmFull2)
+```
+
+```{r}
+pred_test_processed <- predict.lm(lmFull2, test_data_processed)
+mean((test_data_processed$Salary - pred_test_processed) ^ 2)
+```
+
+
+# Now choose model by AIC using stepwise algorithm
+## backward
+```{r}
+summary(lmStepwise <- lm(Salary ~ ., data = train_data_processed))
+slm1 <- step(lmStepwise, direction = "backward")
+summary(slm1)
+```
+
+
+### Test Prediction Accurary with MSE -> step backward
+```{r}
+lmTrain_backward <- lm( Salary ~ AtBat + Hits + Runs + Walks + Years + CHmRun + 
+    CRuns + CWalks + Division + PutOuts + Assists + Errors, data = train_data_processed)
+
+prediction_backward <- predict.lm(lmTrain_backward, test_data_processed)
+mean((test_data_processed$Salary - prediction_backward) ^ 2)
+
+```
+
+### Model Selection with step forward
+```{r}
+min.model <- lm(Salary~1, data = train_data_processed)
+biggest <- formula(lm(Salary ~ ., data = train_data_processed))
+
+slm2 <- step(min.model, direction = "forward", scope = biggest)
+summary(slm2)
+```
+### Test Prediction Accurary with MSE -> step forward
+```{r}
+lmTrain_forward <- lm(formula = Salary ~ CHmRun + Walks + PutOuts + CRuns + CWalks + 
+    Division + Years, data = train_data_processed)
+
+prediction_forward <- predict.lm(lmTrain_forward, test_data_processed)
+mean((test_data_processed$Salary - prediction_forward) ^ 2)
+```
+
+
+### Model Selection with step "both"
+```{r}
+min.model <- lm(Salary~1, data = train_data_processed)
+biggest <- lm(Salary ~ ., data = train_data_processed)
+
+slm3 <- step(min.model, direction = "both", scope = formula(biggest))
+summary(slm3)
+```
+### Test Prediction Accurary with MSE -> step "both"
+```{r}
+lmTrain_both <- lm(formula = Salary ~ CHmRun + Walks + PutOuts + CRuns + CWalks + 
+    Division + Years, data = train_data_processed)
+
+prediction_both <- predict.lm(lmTrain_both, test_data_processed)
+mean((test_data_processed$Salary - prediction_both) ^ 2)
+```
+
+
+## Model comparison with ANOVA
+```{r}
+### MODELS
+## full model
+# lmFull
+## step both
+#lmTrain_both
+## step forward
+#lmTrain_forward
+## step backward
+#lmTrain_backward
+
+anova(lmFull, lmTrain_forward, lmTrain_backward, lmTrain_both)
+
+```
+
+3. Best subset regression:
+```{r}
+library(leaps)
+lm.regsubset<-regsubsets(train_data_processed$Salary ~ ., data=train_data_processed, nbest = 3, nvmax = 8)
+summary(lm.regsubset)
+```
+
+```{r}
+summary(lm.regsubset)
+```
+```{r}
+summary_object <- summary(lm.regsubset)
+str(summary_object$bic)
+plot(summary_object$bic)
+```
+```{r}
+knitr::opts_chunk$set(fig.width=12, fig.height=18) 
+#options(repr.plot.width=6, repr.plot.height=28)
+plot(lm.regsubset)
+str()
+```
+```{r}
+lmTrain_best_subset <- lm(formula = Salary ~ Walks + Years + Runs + PutOuts, data = train_data_processed)
+
+prediction_best_subset <- predict.lm(lmTrain_best_subset, test_data_processed)
+mean((test_data_processed$Salary - prediction_best_subset) ^ 2)
+```
+```{r}
+lmTrain_best_subset2 <- lm(formula = Salary ~ Walks + Years + Hits + HmRun + Division + PutOuts, data = train_data_processed)
+
+prediction_best_subset2 <- predict.lm(lmTrain_best_subset2, test_data_processed)
+mean((test_data_processed$Salary - prediction_best_subset2) ^ 2)
+```
+
+```{r}
+summary(lmTrain_best_subset2)
+```
+
+
+
+```{r}
+library("caret")
+set.seed(123)
+
+model <- train(Salary ~ Walks + Years + Hits + HmRun + Division + PutOuts, method="lm", trControl(method="cv", number=10, verboseIter=TRUE))
+```
+

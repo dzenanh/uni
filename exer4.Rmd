@@ -1,0 +1,519 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 4 Experiment - Dzenan Hamzic, TU Wien"
+output: html_notebook
+---
+
+```{r}
+#install.packages("magrittr")
+#install.packages("dplyr", dependencies=TRUE)
+library(reshape2)
+library(magrittr)
+library(MASS)
+library(klaR)
+```
+
+
+
+```{r}
+### Load Data
+data(OJ, package = "ISLR")
+ # count rows
+data <- na.omit(OJ)
+nrow(data)
+```
+
+
+```{r}
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+
+
+```{r}
+contrasts(data$Purchase)
+```
+
+
+## 1.a) 
+
+#### Create class variables
+```{r}
+new_data <- data
+new_dataY <- array(rep(0), dim=c(nrow(data),2))
+for(row in 1:nrow(data)){
+  if(new_data[row,1] == "CH"){
+    new_dataY[row,1] = 1
+  }else
+    new_dataY[row, 2] = 1
+}
+
+head(new_dataY)
+```
+
+```{r}
+head(new_data)
+#new_data[,19] <- new_dataY
+#head(new_data)
+```
+#### Create class variables
+```{r}
+# set CH as 1. 0 othervise
+new_data$Purchase <- as.numeric(new_data$Purchase == "CH")
+head(new_data)
+```
+```{r}
+# add new columns of categorization target variable
+#ndata <- data.frame(data.matrix(cbind(new_data,new_dataY)))
+#head(ndata)
+```
+
+#### Convert categorical to binary
+```{r}
+new_data <- data.frame(data.matrix(new_data))
+```
+
+
+
+#### Split data randomly with 70/30 splits (train and test)
+```{r}
+set.seed(123)
+ind <- sample(c(TRUE, FALSE), nrow(new_data), replace=TRUE, prob=c(0.7, 0.3))
+train_data <- new_data[ind, ]
+test_data <- new_data[!ind, ]
+train_data
+```
+
+#### Model
+```{r}
+mod.ind <- lm(Purchase ~ ., data = train_data)
+#mod.ind2 <- lm(lpurchase ~., data = train_data)
+#summary(mod.ind)
+mod.ind
+```
+
+
+
+#### Predict
+```{r}
+pred1 <- predict(mod.ind, newdata = test_data)
+head(pred1)
+```
+#### Results
+```{r}
+predicted <- predict(mod.ind, newdata = test_data)
+TAB <- table(test_data$Purchase, predicted >= 0.5)
+head(TAB)
+```
+
+#### Missclasification rate
+```{r}
+mklrate<- 1-sum(diag(TAB))/sum(TAB)
+mklrate
+```
+Missclasification rate with indicator variable is 18.5%
+
+
+```{r}
+head(new_data)
+```
+
+## 1.b) LDA
+I have tried transforming categorical and factor fariables to matrices with equal distances.
+Furthermore, I used principal component scores as new X data to resolve colinearity/singularity.
+#### One train one test set
+```{r}
+mod.lda<-lda(Purchase~., data = train_data)
+mod.lda
+```
+
+#### Results
+```{r}
+predicted <- predict(mod.lda, newdata = test_data)
+TAB <- table(test_data$Purchase, predicted$class)
+head(TAB)
+```
+
+#### Missclasification rate
+```{r}
+mklrate<- 1-sum(diag(TAB))/sum(TAB)
+mklrate
+```
+```{r}
+train_data
+```
+
+#### Cross Validation
+```{r}
+mypred = function(object,newdata) UseMethod("mypred", object)
+mypred.lda <- function(object, newdata){
+  predict(object, newdata=newdata)$class
+}
+library(ipred)
+CEE = control.errorest(k = 5, nboot=10)
+ldacvest <- errorest(Purchase ~ ., data = data, model=lda, est.para=CEE, predict=mypred)
+ldacvest
+```
+
+
+#### binary and/or categorical columns to convert 
+#### "StoreID", "SpecialCH", "SpecialMM", "Store7", "STORE", "rowID"
+#### converte columns of the whole dataset
+```{r}
+new_data$rowID <- 1:nrow(new_data)
+head(new_data)
+
+# columns to convert
+columns_to_convert <- names(new_data) %in% c("StoreID", "SpecialCH", "SpecialMM", "Store7", "STORE", "rowID")
+#columns_to_convert
+selected_columns_data <- new_data[columns_to_convert]
+
+# new data column converted
+new_data_cc <- recast(selected_columns_data, rowID ~ variable + value, id.var = c("rowID"), fun.aggregate = function(x) (length(x) > 0) + 0L)
+
+head(new_data_cc)
+```
+
+```{r}
+original_columns <- new_data[!columns_to_convert]
+new_data_columns_converted <- cbind(original_columns, new_data_cc)
+new_data_columns_converted$rowID <- NULL
+new_data_columns_converted
+```
+
+#### Split converted data randomly on 70/30 splits (train and test)
+```{r}
+set.seed(123)
+ind <- sample(c(TRUE, FALSE), nrow(new_data_columns_converted), replace=TRUE, prob=c(0.7, 0.3))
+# train data converted columns
+train_data_cc <- new_data_columns_converted[ind, ]
+# test data converted columns
+test_data_cc <- new_data_columns_converted[!ind, ]
+train_data_cc
+```
+
+#### LDA on converted X
+```{r}
+mod.lda2 <-lda(Purchase~., data = train_data_cc)
+mod.lda2
+```
+```{r}
+plot(mod.lda2)
+```
+
+
+#### Predict with converted X
+```{r}
+predicted <- predict(mod.lda2, newdata = test_data_cc)
+TAB <- table(test_data_cc$Purchase, predicted$class)
+head(TAB)
+```
+
+#### Missclasification rate (Converted X)
+```{r}
+mklrate<- 1-sum(diag(TAB))/sum(TAB)
+mklrate
+```
+
+### PCA-LDA
+```{r}
+names(train_data_cc[-1])
+```
+
+
+```{r}
+X_train = train_data_cc[-1]
+X_test = test_data_cc[-1]
+pca_object = princomp(X_train, center=TRUE)
+summary(pca_object)
+```
+```{r}
+plot(pca_object)
+```
+
+
+
+```{r}
+biplot(pca_object)
+```
+
+
+#### Use scores as new X
+```{r}
+X_train_scores <- pca_object$scores
+head(X_train_scores)
+```
+```{r}
+new_df_train_pc <- data.frame(X_train_scores)
+new_df_test <- data.frame(X_test)
+#colnames(new_df) = column_names
+# train
+new_df_train_pc["Purchase"] <- train_data_cc$Purchase
+```
+
+
+#### Project test data on principal components
+```{r}
+test.data_pc <- predict(pca_object, newdata = new_df_test)
+test.data_pc <- as.data.frame(test.data_pc)
+test.data_pc["Purchase"] <- test_data_cc$Purchase
+head(test.data_pc)
+```
+
+```{r}
+head(new_df_train_pc)
+```
+
+#### Predict with N principal components
+```{r}
+mat.pc.lda <- lda(Purchase ~Comp.1+Comp.2+Comp.3+Comp.4+Comp.5+Comp.6+Comp.7+Comp.8+Comp.9, new_df_train_pc)
+plot(mat.pc.lda)  
+```
+```{r}
+test.data_pc[c("Comp.1","Comp.2")]
+```
+
+#### Predict using Principal components
+```{r}
+predicted <- predict(mat.pc.lda, newdata = test.data_pc[c("Comp.1","Comp.2","Comp.3","Comp.4","Comp.5","Comp.6","Comp.7","Comp.8","Comp.9")])
+#predicted$class
+TAB <- table(test.data_pc$Purchase, predicted$class)
+head(TAB)
+```
+
+#### Missclasification rate PCA-LDA on 9 first components
+```{r}
+mklrate<- 1-sum(diag(TAB))/sum(TAB)
+mklrate
+```
+
+
+```{r}
+head(new_df_train_pc)
+head(test.data_pc)
+```
+
+
+
+## 1.c) QDA
+Singularity problem can be solved by using principal components
+```{r}
+mod.qda<-qda(formula = Purchase~Comp.1+Comp.2+Comp.3+Comp.4+Comp.5+Comp.6+Comp.7+Comp.8+Comp.9+Comp.10+Comp.11+Comp.12, data = new_df_train_pc)
+predictqda <- predict(mod.qda, newdata = test.data_pc)
+```
+
+#### Missclasification rate with N principal components and QDA
+```{r}
+#nrow(test_data)
+#predictqda
+TAB <- table(test.data_pc$Purchase, predictqda$class)
+mkrqda<- 1-sum(diag(TAB)/sum(TAB))
+mkrqda
+```
+
+```{r}
+head(train_data_cc)
+head(test_data_cc)
+```
+
+
+## 1.d) Regularized discriminant analysis
+```{r}
+mod.rda<-rda(Purchase~., data = train_data_cc)
+#mod.rda$lambda
+predictrda<-predict(mod.rda,test_data_cc)
+#predictrda
+TAB<-table(test_data_cc$Purchase, predictrda$class)
+mkrrda<-1-sum(diag(TAB))/sum(TAB)
+mkrrda
+```
+#### gamma and lambda
+# Lambda in range [0,1] is there to keep the degrees of freedom flexible. It is a compromise between LDA(alpha=0) and QDA(alpha=1). It is used to select between joint and independent group covariances.
+# Gamma is a regularization parameter that shrinks the covariance matrix towards the average eigenvalue.
+
+#### Result with PCAs
+```{r}
+mod.rda<-rda(Purchase ~ Comp.1+Comp.2+Comp.3+Comp.4+Comp.5+Comp.6+Comp.7+Comp.8+Comp.9+Comp.10+Comp.11+Comp.12+Comp.13+Comp.14+Comp.15+Comp.16+Comp.17, data = new_df_train_pc, train.fraction=0.6)
+
+mod.rda$lambda
+predictrda<-predict(mod.rda,test.data_pc)
+#predictrda
+TAB<-table(test_data_cc$Purchase, predictrda$class)
+mkrrda<-1-sum(diag(TAB))/sum(TAB)
+mkrrda
+```
+#### Trying to estimate most important variables
+```{r}
+mod<-lm(Purchase~.,data = new_df_train_pc)
+summary(mod)
+```
+
+## 2. 
+```{r}
+d <- read.csv2("bank.csv")
+d
+```
+
+#### converte "yes" to 1
+```{r}
+d$y <- as.numeric(d$y == "yes")
+d
+```
+
+#### convert X columns
+```{r}
+d$rowID <- 1:nrow(d)
+#head(d)
+
+# columns to convert
+columns_to_convert <- names(d) %in% c("job", "marital", "education", "default", "housing", "loan","contact","poutcome","rowID")
+#columns_to_convert
+selected_columns_data <- d[columns_to_convert]
+
+# new data column converted
+new_d_cc <- recast(selected_columns_data, rowID ~ variable + value, id.var = c("rowID"), fun.aggregate = function(x) (length(x) > 0) + 0L)
+
+new_d_cc
+```
+
+```{r}
+original_columns <- d[!columns_to_convert]
+new_d_cc <- cbind(original_columns, new_d_cc)
+new_d_cc$rowID <- NULL
+new_d_cc
+```
+
+```{r}
+new_d_cc <- data.frame(data.matrix(new_d_cc))
+new_d_cc
+```
+
+## 2.a)
+```{r}
+sample_ind <- sample(nrow(new_d_cc), 3000)
+d_train <- d[sample_ind,]
+d_test <- d[-sample_ind,]
+```
+
+```{r}
+plot(d_train$y)
+```
+
+
+```{r}
+mod.lda3 <-lda(y~., data = d[sample_ind,])
+mod.lda3
+#head(TAB3)
+
+```
+```{r}
+predicted3 <- predict(mod.lda3, newdata = d_test)
+TAB3 <- table(d_test$y, predicted3$class)
+TAB3
+```
+
+
+#### Result
+```{r}
+mklrate<- 1-sum(diag(TAB3))/sum(TAB3)
+mklrate
+```
+
+## 2.b)
+I used 'balanced' sampling strategy with 13% of no and 80% of yes. Thus I made a new 'balanced 'train sample of ~1000 samples and tested on test sample with 200 samples what did not improve the recall. 
+
+```{r}
+library(BalancedSampling)
+# Select sample
+set.seed(123);
+N = 4521; # population size
+n = 3000; # sample size
+p = rep(n/N,N); # inclusion probabilities
+X = cbind(p,runif(N),runif(N)); # matrix of auxiliary variables
+s = cube(p,X); # select sample
+head(s)
+```
+```{r}
+# add row id
+new_d_cc$id <- 1:nrow(new_d_cc)
+
+group_no <- new_d_cc[ which(new_d_cc$y==0),]
+group_yes <- new_d_cc[ which(new_d_cc$y==1),]
+group_no
+group_yes
+```
+
+
+
+```{r}
+#install.packages("splitstackshape", dependencies = TRUE)
+library(splitstackshape)
+set.seed(1)
+sample.balanced.no <- stratified(group_no, c("y"), .13)
+sample.balanced.no
+sample.balanced.yes <- stratified(group_yes, c("y"), .8)
+sample.balanced.yes
+
+```
+
+```{r}
+sample.combined <- rbind(sample.balanced.no, sample.balanced.yes)
+sample.combined
+```
+
+
+```{r}
+commonID<-intersect(sample.combined$id, new_d_cc$id)
+test_data_dd <- new_d_cc[-commonID,]
+test_data_dd
+```
+
+
+
+```{r}
+plot(sample.combined$y)
+```
+```{r}
+sample.combined
+```
+```{r}
+test_data_dd$id<-NULL
+sample.combined$id<-NULL
+```
+
+```{r}
+nrow(test_data_dd)
+```
+
+
+```{r}
+mod.lda4 <-lda(y~., data = sample.combined)
+mod.lda4
+```
+#### Confusion matrix
+```{r}
+predicted4 <- predict(mod.lda4, newdata = test_data_dd)
+TAB4 <- table(test_data_dd$y, predicted4$class)
+TAB4
+```
+Result with no balanced sampling
+
+     0    1
+  0 1298   44
+  1   98   81
+
+
+#### Result
+```{r}
+mklrate<- 1-sum(diag(TAB4))/sum(TAB4)
+mklrate
+```
+
+
+
+
+
+

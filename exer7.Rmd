@@ -1,0 +1,157 @@
+---
+title: "Advanced Methods for Regression and Classification - Exercise 7 Experiment - Dzenan Hamzic, TU Wien"
+output: html_notebook
+---
+
+
+## Data 1:Bone Mineral Density Data
+Measurements in the bone mineral density of 261 north american adolescents, as function of age. Each value is the difference in spnbmd taken on two consecutive visits, divided by the average. The age is the average age over the two visits.
+
+## Data 2: Surface temperature of stars and their light intensity
+The Hertzsprung–Russell diagram, abbreviated as H–R diagram, HR diagram or HRD, is a scatter plot of stars showing the relationship between the stars' absolute magnitudes or luminosities versus their stellar classifications or effective temperatures.
+https://en.wikipedia.org/wiki/Hertzsprung%E2%80%93Russell_diagram
+
+
+## 1.
+```{r}
+library(ElemStatLearn)
+data(bone)
+d <- bone[bone$gender=="male",c("age","spnbmd")]
+n <- nrow(d)
+set.seed(123)
+train <- sample(1:n,round(2/3*n))
+test <- c(1:n)[-train]
+
+plot(d[train,], main="Train data")
+plot(d[test,], main="Test data")
+```
+### 1.a)
+```{r}
+train_data <- d[train,]
+test_data <- d[test,]
+
+m1 <- smooth.spline(train_data$age, train_data$spnbmd, cv=TRUE)
+plot(train_data$age, train_data$spnbmd, main="Smooth spline CV fit to train")
+lines(m1, col="blue")
+#Error in plot.xy(xy.coords(x, y), type = type, ...) : plot.new has not been called yet
+```
+
+```{r}
+predicted_m1 <- predict(m1, x=test_data$age)
+mean((predicted_m1$y - test_data$spnbmd)^2)
+```
+smooth.splines with CV chooses automatically number of spline basis functions.
+BS splines with df=5 from last exercise had MSE of 0.00119171. NS splines with df=5 MSE was 0.001585333.
+
+
+### 1.b)
+```{r}
+df_seq <- seq(2, 20, by=1)
+for (df in df_seq){
+  model <- smooth.spline(train_data$age, train_data$spnbmd, df=df)
+  predicted_ <- predict(model, x=test_data$age)
+  MSE <- round(mean((predicted_$y - test_data$spnbmd)^2),5)
+  
+  plot(test_data$age, test_data$spnbmd, xlab='age', ylab='spnbmd',  xlim=range(test_data$age),  ylim=range(test_data$spnbmd),col="blue", main=paste("Smooth spline, df=",df," - Pred. (red) vs. Actual, MSE:",MSE))
+  par(new=D)
+  plot(test_data$age, predicted_$y,  xlim=range(test_data$age), ylim=range(test_data$spnbmd),col="red", xlab='', ylab='')
+  lines(model, col="yellow", xlab='', ylab='')
+  
+  print(paste("df:",df,"MSE:", MSE))
+}
+```
+Optimal df value seems to be 5. The resulting MSE is equal to the CV result from 1.a)
+
+[1] "df: 2 MSE: 0.00147"
+[1] "df: 3 MSE: 0.00128"
+[1] "df: 4 MSE: 0.00116"
+[1] "df: 5 MSE: 0.00113"
+[1] "df: 6 MSE: 0.00114"
+[1] "df: 7 MSE: 0.00116"
+[1] "df: 8 MSE: 0.00118"
+[1] "df: 9 MSE: 0.00122"
+[1] "df: 10 MSE: 0.00126"
+[1] "df: 11 MSE: 0.0013"
+[1] "df: 12 MSE: 0.00135"
+[1] "df: 13 MSE: 0.00139"
+[1] "df: 14 MSE: 0.00144"
+[1] "df: 15 MSE: 0.00147"
+[1] "df: 16 MSE: 0.00151"
+[1] "df: 17 MSE: 0.00153"
+[1] "df: 18 MSE: 0.00156"
+[1] "df: 19 MSE: 0.00158"
+[1] "df: 20 MSE: 0.0016"
+
+
+
+## 2.
+```{r}
+d <- read.csv("starsdata.csv")
+head(d)
+```
+```{r}
+plot(d)
+```
+
+### 2.a)
+```{r}
+m2 <- smooth.spline(d$temp, d$light, cv=TRUE)
+plot(d$temp, d$light, main="Smooth spline CV fit to DS")
+lines(m2, col="blue")
+```
+
+### 2.b)
+```{r}
+library(splines)
+
+x.ns <- ns(d$temp,df=5)
+lm1 <- lm(d$light~x.ns)
+summary(lm1)
+```
+```{r}
+#fitted(lm1)
+```
+
+
+```{r}
+plot(d$temp, d$light, main="NS spline df=5 fit to DS", xlim=range(d$temp),  ylim=range(d$light))
+par(new=D)
+plot(d$temp, predict.lm(lm1, list(x=d$temp)), col="red", main="", xlim=range(d$temp),  ylim=range(d$light))
+```
+
+### 2.c)
+```{r}
+x.py <- poly(d$temp,df=5)
+lm2 <- lm(d$light~x.py)
+summary(lm2)
+```
+```{r}
+plot(d$temp, d$light, main="Poly^5 regression fit to DS" , xlim=range(d$temp),  ylim=range(d$light))
+par(new=D)
+plot(d$temp, predict.lm(lm2, list(x=d$temp)), col="red", xlim=range(d$temp),  ylim=range(d$light), xlab='', ylab='')
+```
+### 2.d)
+
+```{r}
+lm3 <- lm(d$light~d$temp)
+summary(lm3)
+```
+```{r}
+plot(d$temp, d$light, main="Linear regression fit to DS" , xlim=range(d$temp),  ylim=range(d$light))
+abline(lm3)
+```
+
+### 2.e)
+```{r}
+library(robustbase)
+lm4 <- lmrob(d$light~d$temp)
+summary(lm4)
+```
+```{r}
+plot(d$temp, d$light, main="Robust Linear regression fit to DS" , xlim=range(d$temp),  ylim=range(d$light))
+abline(lm4)
+```
+Classic Linear model is a bad choice for nonlinear data. The classical linear model has even negative adjusted R².
+Slightly better fit, then those of classic linear, has the robust linear model. 
+Smooth spline method from 2.a tends to overfit the data (as seen from the plot). This is no wonder since it searches for model with minimum CV error on the whole data. Natural cubic splines with 5 splines fit the data better then Smooth spline from 2.a. Poly regression shows overall best fit to the whole data set. There is no overfitting, and underfitting seems resonable. 
+
